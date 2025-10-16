@@ -1,0 +1,315 @@
+<meta name='viewport' content='width=device-width, initial-scale=1'/><!doctype html>
+
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Bank Employees Information Record</title>
+  <style>
+    :root{--accent:#0f62fe;--muted:#666}
+    body{font-family:Inter,system-ui,Segoe UI,Roboto,"Helvetica Neue",Arial;line-height:1.4;margin:0;background:#f6f8fb;color:#111}
+    .container{max-width:1000px;margin:28px auto;padding:20px;background:#fff;border-radius:12px;box-shadow:0 6px 24px rgba(16,24,40,0.08)}
+    h1{margin:0 0 8px;font-size:20px}
+    p.lead{margin:0 0 18px;color:var(--muted)}
+    .grid{display:grid;grid-template-columns:1fr 380px;gap:18px}/* form */
+form{display:flex;flex-direction:column;gap:10px}
+label{font-size:13px;color:#333}
+input[type=text], input[type=email], input[type=number], input[type=date], select, textarea{width:100%;padding:8px 10px;border:1px solid #e3e7ee;border-radius:8px;font-size:14px}
+.row{display:flex;gap:10px}
+.row > *{flex:1}
+.actions{display:flex;gap:8px}
+button{background:var(--accent);color:white;padding:8px 12px;border-radius:10px;border:0;cursor:pointer}
+button.secondary{background:#e6eefc;color:var(--accent)}
+.small{padding:6px 8px;font-size:13px}
+
+/* table */
+.controls{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+.search{display:flex;gap:8px}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th, td{padding:10px 8px;text-align:left;border-bottom:1px solid #f0f3f7}
+th{color:#555;font-weight:600}
+tr:hover{background:#fbfdff}
+.avatar{width:48px;height:48px;border-radius:8px;object-fit:cover;background:#f0f3f7}
+.badge{display:inline-block;padding:6px 8px;border-radius:999px;background:#eef6ff;color:var(--accent);font-weight:600}
+
+/* responsive */
+@media (max-width:900px){.grid{grid-template-columns:1fr;}
+  .controls{flex-direction:column;align-items:stretch;gap:10px}
+}
+
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Bank Employees Information Record</h1>
+    <p class="lead">Add, edit and manage employee records. Data is saved in your browser (localStorage). You can export CSV.</p><div class="grid">
+  <!-- Left: Table / Controls -->
+  <div>
+    <div class="controls">
+      <div class="search">
+        <input id="searchInput" type="text" placeholder="Search by name, id, dept or position" />
+        <select id="filterDept">
+          <option value="">All Departments</option>
+        </select>
+        <button id="clearFilter" class="secondary small">Clear</button>
+      </div>
+
+      <div>
+        <button id="exportCsv" class="small">Export CSV</button>
+        <button id="loadSample" class="secondary small">Load Sample</button>
+        <button id="clearAll" class="secondary small">Clear All</button>
+      </div>
+    </div>
+
+    <div style="overflow:auto;max-height:520px">
+      <table id="employeeTable">
+        <thead>
+          <tr>
+            <th>Emp ID</th>
+            <th>Name</th>
+            <th>Department</th>
+            <th>Position</th>
+            <th>Join Date</th>
+            <th>Salary</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <!-- rows inserted by JS -->
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Right: Form -->
+  <aside>
+    <form id="employeeForm">
+      <label>Employee ID</label>
+      <input id="empId" type="text" placeholder="e.g. EMP001" required />
+
+      <label>Name</label>
+      <input id="name" type="text" placeholder="Full name" required />
+
+      <div class="row">
+        <div>
+          <label>Department</label>
+          <select id="department">
+            <option value="Operations">Operations</option>
+            <option value="Finance">Finance</option>
+            <option value="HR">HR</option>
+            <option value="IT">IT</option>
+            <option value="Customer Service">Customer Service</option>
+            <option value="Compliance">Compliance</option>
+            <option value="Other">Other</option>
+          </select>
+        </div>
+        <div>
+          <label>Position</label>
+          <input id="position" type="text" placeholder="e.g. Officer / Manager" />
+        </div>
+      </div>
+
+      <label>Email</label>
+      <input id="email" type="email" placeholder="abc@example.com" />
+
+      <label>Phone</label>
+      <input id="phone" type="text" placeholder="Mobile number" />
+
+      <div class="row">
+        <div>
+          <label>Date of Joining</label>
+          <input id="doj" type="date" />
+        </div>
+        <div>
+          <label>Salary (INR)</label>
+          <input id="salary" type="number" min="0" step="1" />
+        </div>
+      </div>
+
+      <label>Photo (optional)</label>
+      <input id="photo" type="file" accept="image/*" />
+      <img id="photoPreview" class="avatar" alt="preview" style="margin-top:8px;display:none" />
+
+      <div class="actions" style="margin-top:8px">
+        <button id="addBtn" type="submit">Add / Save</button>
+        <button id="resetBtn" type="button" class="secondary">Clear Form</button>
+      </div>
+      <input type="hidden" id="editingIndex" />
+    </form>
+  </aside>
+</div>
+
+  </div>  <script>
+    // Simple Employee Manager using localStorage
+    const STORAGE_KEY = 'bank_employees_v1';
+    let employees = [];
+
+    // Elements
+    const empForm = document.getElementById('employeeForm');
+    const tableBody = document.querySelector('#employeeTable tbody');
+    const searchInput = document.getElementById('searchInput');
+    const filterDept = document.getElementById('filterDept');
+    const clearFilterBtn = document.getElementById('clearFilter');
+    const exportCsvBtn = document.getElementById('exportCsv');
+    const loadSampleBtn = document.getElementById('loadSample');
+    const clearAllBtn = document.getElementById('clearAll');
+
+    const fields = ['empId','name','department','position','email','phone','doj','salary','photoData'];
+
+    // Initialize
+    function init(){
+      loadFromStorage();
+      renderTable();
+      populateDeptFilter();
+    }
+
+    function loadFromStorage(){
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if(raw){
+        try{ employees = JSON.parse(raw) }catch(e){ employees = [] }
+      }
+    }
+
+    function saveToStorage(){
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(employees));
+    }
+
+    function renderTable(){
+      const query = searchInput.value.trim().toLowerCase();
+      const deptFilter = filterDept.value;
+      tableBody.innerHTML = '';
+
+      employees.forEach((emp, idx) => {
+        if(deptFilter && emp.department !== deptFilter) return;
+        const combined = `${emp.empId} ${emp.name} ${emp.department} ${emp.position}`.toLowerCase();
+        if(query && !combined.includes(query)) return;
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${escapeHtml(emp.empId)}</td>
+          <td><div style="display:flex;align-items:center;gap:8px"><img class='avatar' src='${emp.photoData||''}' ${emp.photoData?"":"style='display:none'"}/> <div><strong>${escapeHtml(emp.name)}</strong><div style='color:var(--muted);font-size:13px'>${escapeHtml(emp.email||'')}</div></div></div></td>
+          <td>${escapeHtml(emp.department)}</td>
+          <td>${escapeHtml(emp.position)}</td>
+          <td>${emp.doj||''}</td>
+          <td>${emp.salary?Number(emp.salary).toLocaleString('en-IN'):''}</td>
+          <td>
+            <button data-edit='${idx}' class='small'>Edit</button>
+            <button data-delete='${idx}' class='secondary small'>Delete</button>
+          </td>
+        `;
+        tableBody.appendChild(tr);
+      });
+
+      // attach action handlers
+      tableBody.querySelectorAll('[data-edit]').forEach(btn => btn.addEventListener('click', onEdit));
+      tableBody.querySelectorAll('[data-delete]').forEach(btn => btn.addEventListener('click', onDelete));
+    }
+
+    function populateDeptFilter(){
+      const depts = new Set(employees.map(e=>e.department).filter(Boolean));
+      // keep default option
+      filterDept.innerHTML = '<option value="">All Departments</option>';
+      ['Operations','Finance','HR','IT','Customer Service','Compliance','Other'].forEach(d => {
+        const opt = document.createElement('option'); opt.value = d; opt.textContent = d; filterDept.appendChild(opt);
+      })
+      // add any custom ones at end
+      depts.forEach(d => {
+        if([...filterDept.options].some(o=>o.value===d)) return;
+        const opt = document.createElement('option'); opt.value = d; opt.textContent = d; filterDept.appendChild(opt);
+      })
+    }
+
+    // form submit: add or update
+    empForm.addEventListener('submit', function(e){
+      e.preventDefault();
+      const editingIndex = document.getElementById('editingIndex').value;
+      const emp = {};
+      fields.forEach(f => emp[f] = document.getElementById(f) ? document.getElementById(f).value : '');
+
+      // basic validation: unique empId
+      if(!emp.empId || !emp.name){ alert('Employee ID and Name are required'); return; }
+      if(editingIndex){
+        employees[editingIndex] = emp;
+      } else {
+        // check duplicate empId
+        if(employees.some(e=>e.empId === emp.empId)){ if(!confirm('Emp ID exists. Add duplicate?')) return; }
+        employees.push(emp);
+      }
+      saveToStorage(); renderTable(); populateDeptFilter(); clearForm();
+    });
+
+    // Photo preview & store as base64
+    const photoInput = document.getElementById('photo');
+    const photoPreview = document.getElementById('photoPreview');
+    photoInput.addEventListener('change', function(){
+      const f = this.files[0];
+      if(!f) { photoPreview.style.display='none'; document.getElementById('photoData').value=''; return; }
+      const reader = new FileReader();
+      reader.onload = function(ev){ document.getElementById('photoData').value = ev.target.result; photoPreview.src = ev.target.result; photoPreview.style.display='inline-block'; }
+      reader.readAsDataURL(f);
+    });
+
+    document.getElementById('resetBtn').addEventListener('click', clearForm);
+
+    function clearForm(){
+      empForm.reset(); document.getElementById('photoPreview').style.display='none'; document.getElementById('photoData').value=''; document.getElementById('editingIndex').value='';
+    }
+
+    function onEdit(ev){
+      const idx = ev.currentTarget.getAttribute('data-edit');
+      const emp = employees[idx];
+      if(!emp) return;
+      fields.forEach(f=>{ if(document.getElementById(f)) document.getElementById(f).value = emp[f] || '' });
+      if(emp.photoData){ photoPreview.src = emp.photoData; photoPreview.style.display='inline-block'; }
+      document.getElementById('editingIndex').value = idx;
+      window.scrollTo({top:0,behavior:'smooth'});
+    }
+
+    function onDelete(ev){
+      const idx = ev.currentTarget.getAttribute('data-delete');
+      if(confirm('Delete this record?')){
+        employees.splice(idx,1); saveToStorage(); renderTable(); populateDeptFilter();
+      }
+    }
+
+    // search, filter
+    searchInput.addEventListener('input', renderTable);
+    filterDept.addEventListener('change', renderTable);
+    clearFilterBtn.addEventListener('click', function(){ searchInput.value=''; filterDept.value=''; renderTable(); });
+
+    // export CSV
+    exportCsvBtn.addEventListener('click', function(){
+      if(!employees.length){ alert('No records to export'); return; }
+      const cols = ['EmpID','Name','Department','Position','Email','Phone','DateOfJoining','Salary'];
+      const rows = employees.map(e => [e.empId,e.name,e.department,e.position,e.email,e.phone,e.doj,e.salary]);
+      let csv = cols.join(',') + '\n' + rows.map(r => r.map(v=>`"${(v||'').toString().replace(/"/g,'""') }"`).join(',')).join('\n');
+      const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = url; a.download = 'employees.csv'; a.click(); URL.revokeObjectURL(url);
+    });
+
+    // load sample
+    loadSampleBtn.addEventListener('click', function(){
+      if(!confirm('Load sample data? This will append to existing records.')) return;
+      const sample = [
+        {empId:'EMP001',name:'Asha Kumar',department:'Finance',position:'Accountant',email:'asha@example.com',phone:'9876543210',doj:'2021-03-15',salary:'45000',photoData:''},
+        {empId:'EMP002',name:'Rahul Mehta',department:'IT',position:'Developer',email:'rahul@example.com',phone:'9123456780',doj:'2019-11-01',salary:'65000',photoData:''},
+        {empId:'EMP003',name:'Priya Singh',department:'Customer Service',position:'Agent',email:'priya@example.com',phone:'9988776655',doj:'2023-01-04',salary:'32000',photoData:''}
+      ];
+      employees = employees.concat(sample); saveToStorage(); renderTable(); populateDeptFilter();
+    });
+
+    // clear all
+    clearAllBtn.addEventListener('click', function(){ if(confirm('Clear all records? This cannot be undone.')){ employees=[]; saveToStorage(); renderTable(); populateDeptFilter(); } });
+
+    // small helpers
+    function escapeHtml(s){ if(!s) return ''; return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+    // hidden input for photo base64
+    // add hidden field to form dynamically
+    const hidden = document.createElement('input'); hidden.type='hidden'; hidden.id='photoData'; hidden.name='photoData'; document.getElementById('employeeForm').appendChild(hidden);
+
+    // initialize
+    init();
+  </script></body>
+</html>
